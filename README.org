@@ -1,0 +1,115 @@
+* bangumi.el
+Emacs Org-mode 与 Bangumi.tv 联动工具
+
+** 简介
+
+=bangumi.el= 是一个 Emacs 插件，旨在将您的 Bangumi.tv (BGM) 追番进度与 Org Mode 文件同步。通过这个插件，您可以在 Org Mode 中直接更新您在 Bangumi 上的动画、书籍等条目的观看/阅读状态和进度。
+
+本插件主要提供以下功能：
+
+- 状态同步: 根据 Org Mode 标题的 TODO 关键字（如 TODO, DONE, HOLD 等）自动更新对应 Bangumi 条目的收藏状态（在看、看过、想看、搁置、抛弃）。
+
+- 进度同步: 自动将 Org Mode 中标题内记录的 [已看集数/总集数] 格式的进度同步到 Bangumi，标记对应集数为已看。
+
+- 异步执行: 进度更新是异步执行的，避免在操作过程中卡顿 Emacs。
+
+- 代理支持: 支持通过代理访问 Bangumi API。
+
+** 依赖
+
+本插件需要以下依赖：
+
+[[https://github.com/alphapapa/plz.el][plz]]: 一个 Emacs 的 HTTP 客户端库。
+
+请确保在您的 Emacs 配置中已经安装并加载了这个包。
+
+** 安装
+
+将 bangumi.el 文件放置到您的 Emacs =load-path= 中。
+
+在您的 Emacs 配置文件 (如 init.el) 中添加以下代码：
+
+
+#+begin_src elisp
+(require 'bangumi)
+#+end_src
+
+** 配置
+
+*** Bangumi Access Token
+
+您需要从 Bangumi 开发者后台获取您的 Access Token。访问 https://bgm.tv/dev/app/create 创建一个新应用以获取 Token。
+
+*** 设置 Token 变量
+在您的配置文件中设置 my/bgm-token 变量：
+
+#+begin_src elisp
+(setq my/bgm-token "YOUR_BANGUMI_ACCESS_TOKEN")
+#+end_src
+
+*** 代理设置
+代码中已硬编码代理地址 http://127.0.0.1:7890 如果您的代理地址不同，请修改 =my/bgm-mark-read-episodes= 和 =my/bgm-update-subject= 函数中的 =plz-curl-default-args= 部分。
+
+#+begin_src elisp
+(plz-curl-default-args '("--silent" "--location" "--ssl-no-revoke" "--proxy" "http://YOUR_PROXY_ADDRESS:PORT"))
+#+end_src
+
+** 使用方法
+
+*** 在 Org Mode 中关联 Bangumi 条目
+
+在一个 Org Mode 标题下，添加一个名为 BGM 的属性，其值为对应 Bangumi 条目的 =subject= ID。
+
+#+begin_src org
+,* TODO [1/12] 某某动画
+  :PROPERTIES:
+  :BGM:      123456
+  :END:
+#+end_src
+
+这里的 =123456= 就是该动画在 Bangumi 上的 =subject ID= 。
+
+*** 更新观看状态
+
+通过更改 Org 标题的 TODO 关键字来更新 Bangumi 上的收藏状态。这会通过 =my/bgm-update-subject= 函数实现。
+
+| TODO         | 在看 |
+| DONE         | 看过 |
+| HOLD         | 想看 |
+| XXXX         | 抛弃 |
+| 无TODO关键字 | 搁置 |
+
+您可以将 =my/bgm-update-subject= 函数添加到一个 hook 中，例如 =org-after-todo-state-change-hook= ，以便在状态变更后自动触发。
+
+
+#+begin_src elisp
+(add-hook 'org-after-todo-state-change-hook #'my/bgm-update-subject)
+#+end_src
+
+*** 更新观看进度
+在带有 BGM 属性的标题中，使用 [已看集数/总集数] 的格式来记录进度，例如 =[3/12]= 。当这个数字发生变化时，=my/bgm-async-update-episodes= 函数会被触发，自动将前 =3= 集在 Bangumi 上标记为已看。
+
+为了实现自动化，可以将 =my/bgm-async-update-episodes= 添加到合适的 hook 中，例如在 =checkbox= 状态变化时触发。
+
+#+begin_src elisp
+;; 这是一个示例，您可能需要根据您的工作流进行调整
+(add-hook 'org-checkbox-statistics-hook #'my/bgm-async-update-episodes)
+#+end_src
+
+** 函数说明
+
+=my/bgm-mark-read-episodes (subject readcount)= 
+
+更新指定 =subject= 的观看进度。它会获取未读的章节，并标记 =readcount= 数量的章节为已读。
+
+=my/bgm-get-subject-marked-unread-episodes (subject readcount)=
+
+获取一个 =subject= 中，所有在 =readcount= 范围内但尚未在 Bangumi 上标记为已看的章节的 ID 列表。
+
+=my/bgm-async-update-episodes=
+
+一个交互式函数，设计用于在 Org Mode 的 hook 中异步调用。它会解析标题中的进度 =[X/Y]= ，并调用 =my/bgm-mark-read-episodes= 来在后台更新 Bangumi 上的进度。
+
+=my/bgm-update-subject=
+
+一个交互式函数，用于同步 Bangumi 条目的收藏状态。它会根据 Org 标题的 TODO 关键字来发送更新请求。

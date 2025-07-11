@@ -1,0 +1,107 @@
+(require 'plz)
+(require 'json)
+
+(defun my/bgm-mark-read-episodes (subject readcount)
+  "更新某subject的观看进度"
+  (when (> readcount 0)
+    ;; 这里调用下面的函数处理得到需要标记为已读的章节编号
+    (let* (;; 为bgm启用全局代理
+           (plz-curl-default-args '("--silent" "--location" "--ssl-no-revoke" "--proxy" "http://127.0.0.1:7890"))
+           (unread (my/bgm-get-subject-marked-unread-episodes subject readcount)))
+      ;;没有匹配到的未读章节时跳过
+      (when unread
+        (plz 'patch (concat "https://api.bgm.tv/v0/users/-/collections/" subject "/episodes")
+          :headers `(("User-Agent" . "tomoemami/emacs-bgm")
+                     ("Authorization" . ,(concat "Bearer " my/bgm-token))
+                     ("Accept" . "*/*")
+                     ("Content-Type" . "application/json"))
+          :body (json-encode `(:episode_id ,unread :type 2))
+          :then (lambda (r) (message "%s" r))))
+      (message "已更新BGM观看进度"))))
+
+(defun my/bgm-get-subject-marked-unread-episodes (subject readcount)
+  """
+  返回已勾选checkbox集数却未在BGM里标为已看的章节编号。传入str主题编号与number观看进度。
+  "
+  ;; 获取该subject的全部章节
+  (let* (;; 由于上层代码已经设置了代理，这里不再重复
+         ;; (plz-curl-default-args '("--silent" "--location" "--proxy" "http://127.0.0.1:7890"))
+         (episodes (plz 'get (concat "https://api.bgm.tv/v0/users/-/collections/" subject "/episodes?offset=0&limit=100")
+                     :headers `(("User-Agent" . "tomoemami/emacs-bgm")
+                                ("Authorization" . ,(concat "Bearer " my/bgm-token))
+                                ("Accept" . "application/json"))
+                     :as #'json-read))
+         ;; 处理传入的观看进度
+         (readed (number-sequence 1 readcount))
+         (result '()))
+    ;; 获取全部章节数据
+    (dolist (epi (seq-into (alist-get 'data episodes) 'list))
+      ;; 当 某一章节未标为已读（2代表已读） 且 序号在目前标记的观看进度内时
+      (when (and (< (alist-get 'type epi) 1) (memq (alist-get 'ep (alist-get 'episode epi)) readed))
+        ;; 收集汇总Bangumi上未读章节的编号
+        (push (alist-get 'id (alist-get 'episode epi)) result)))
+    result))
+
+
+(defun my/bgm-async-update-episodes()
+  "更新章节，放在checkbox变化的hook里"
+  (interactive)
+  ;; 仅在有BGM property和有TODO-keywords的时候触发
+  (when (and (org-entry-get nil "BGM") (nth 2 (org-heading-components)))
+    (let* ((heading (nth 4 (org-heading-components)))
+           (readed (when (string-match "\\[\\([0-9]+\\)/" heading) (string-to-number (match-string 1 heading))))
+           (subject (org-entry-get nil "BGM")))
+      (when (and readed (> readed 0) subject)
+        (async-start
+         ;; --- This runs in the background ---
+         `(lambda ()
+            (condition-case err
+                ;; Make sure the original function is loaded
+                (let ((load-path ',load-path))
+                  (require 'bangumi)
+                  (when (not (eq system-type 'darwin))
+                    (setq plz-curl-default-args ',plz-curl-default-args)
+                    (setq plz-curl-program ,plz-curl-program))
+                  (setq my/bgm-token ,my/bgm-token)
+                  (my/bgm-mark-read-episodes ,subject ,readed)
+                  'success)
+              (error (error-message-string err))))
+         ;; --- This runs after the background task is done ---
+         `(lambda (result)
+            (cond
+             ((eq result 'success)
+              (message "进度更新成功 - %s" ,readed))
+             (t
+              (message "进度更新失败： %s" result)))))))))
+
+(defun my/bgm-update-subject()
+  """
+同步更新BGM的观看情况。目前是TODO-在看；DONE-看过；XXXX-抛弃；HOLD-想看；没有TODO关键字-搁置。
+相关数字与BGM状态的对应：
+1 想看，2 看过，3 在看，4 搁置，5 抛弃
+目前仅会在以下情况触发：
+有'BGM'属性，证明需要调用bangumi的api 'and'
+'not' 有'repeater'且标记为'DONE'/'TODO'，证明是类似追番的场景
+  """
+  (interactive)
+  (let* ((subject (org-entry-get nil "BGM"))
+         (todo (nth 2 (org-heading-components)))
+         (status (cond ((string-equal todo "TODO") '(3 . "在看"))
+                       ((string-equal todo "HOLD") '(1 . "想看"))
+                       ((string-equal todo "DONE") '(2 . "看过"))
+                       ((string-equal todo "XXXX") '(5 . "抛弃"))
+                       (t '(4 . "搁置"))))
+         ;; 为bgm启用全局代理
+         (plz-curl-default-args '("--silent" "--location" "--ssl-no-revoke" "--proxy" "http://127.0.0.1:7890")))
+    (when (and subject
+               (not (and (org-get-repeat) (or (string-equal todo "DONE") (string-equal todo "TODO")))))
+      (plz 'post (concat "https://api.bgm.tv/v0/users/-/collections/" subject)
+        :headers `(("User-Agent" . "tomoemami/emacs-bgm")
+                   ("Authorization" . ,(concat "Bearer " my/bgm-token))
+                   ("Content-Type" . "application/json")
+                   ("Accept" . "*/*"))
+        :body (json-encode `(("type" . ,(car status))))
+        :then (lambda (r) (message "%s" r) (message "已更新BGM观看状态"))))))
+
+(provide 'bangumi)
+;;; bangumi.el ends here
