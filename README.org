@@ -55,10 +55,10 @@ Emacs Org-mode 与 bangumi.tv / bgm.tv 联动工具
 #+end_src
 
 *** 代理设置
-代码中已硬编码代理地址 http://127.0.0.1:7890 如果您的代理地址不同，请修改 =my/bgm-mark-read-episodes= 和 =my/bgm-update-subject= 函数中的 =plz-curl-default-args= 部分。
+默认不开启代理。如果您需要开启代理，可如下修改变量 =my/bgm-plz-proxy= ：
 
 #+begin_src elisp
-(plz-curl-default-args '("--silent" "--location" "--ssl-no-revoke" "--proxy" "http://YOUR_PROXY_ADDRESS:PORT"))
+(setq my/bgm-plz-proxy "--proxy" "http://YOUR_PROXY_ADDRESS:PORT")
 #+end_src
 
 ** 使用方法
