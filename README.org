@@ -105,18 +105,33 @@ Emacs Org-mode 与 bangumi.tv / bgm.tv 联动工具
 
 ** 函数说明
 
-*** =my/bgm-mark-read-episodes (subject readcount)= 
+*** my/bgm-mark-read-episodes
+
+#+begin_src elisp
+my/bgm-mark-read-episodes SUBJECT READCOUNT
+#+end_src
 
 更新指定 =subject= 的观看进度。它会获取未读的章节，并标记 =readcount= 数量的章节为已读。
 
-*** =my/bgm-get-subject-marked-unread-episodes (subject readcount)=
+*** my/bgm-get-subject-marked-unread-episodes 
+#+begin_src elisp
+my/bgm-get-subject-marked-unread-episodes SUBJECT READCOUNT
+#+end_src
 
 获取一个 =subject= 中，所有在 =readcount= 范围内但尚未在 Bangumi 上标记为已看的章节的 ID 列表。
 
-*** =my/bgm-async-update-episodes=
+*** my/bgm-async-update-episodes
+
+#+begin_src elisp
+my/bgm-async-update-episodes
+#+end_src
 
 一个交互式函数，设计用于在 Org Mode 的 hook 中异步调用。它会解析标题中的进度 =[X/Y]= ，并调用 =my/bgm-mark-read-episodes= 来在后台更新 Bangumi 上的进度。
 
-*** =my/bgm-update-subject=
+*** my/bgm-update-subject
+
+#+begin_src elisp
+my/bgm-update-subject
+#+end_src
 
 一个交互式函数，用于同步 Bangumi 条目的收藏状态。它会根据 Org 标题的 TODO 关键字来发送更新请求。
