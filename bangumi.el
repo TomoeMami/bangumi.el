@@ -1,5 +1,6 @@
 (require 'plz)
 (require 'json)
+(require 'async)
 
 (defvar my/bgm-plz-proxy nil
   "proxy for plz, a list like '(\"--proxy\" \"http://127.0.0.1:7890\") ")
@@ -20,15 +21,15 @@
                      ("Content-Type" . "application/json"))
           :body (json-encode `(:episode_id ,unread :type 2))
           :then (lambda (r) (message "%s" r))))
-      (message "已更新BGM观看进度"))))
+      (sleep-for 5))))
 
 (defun my/bgm-get-subject-marked-unread-episodes (subject readcount)
   """
   返回已勾选checkbox集数却未在BGM里标为已看的章节编号。传入str主题编号与number观看进度。
   "
   ;; 获取该subject的全部章节
-  (let* (;; 由于上层代码已经设置了代理，这里不再重复
-         (episodes (plz 'get (concat "https://api.bgm.tv/v0/users/-/collections/" subject "/episodes?offset=0&limit=100")
+  ;; 由于上层代码已经设置了代理，这里不再重复
+  (let* ((episodes (plz 'get (concat "https://api.bgm.tv/v0/users/-/collections/" subject "/episodes?offset=0&limit=100")
                      :headers `(("User-Agent" . "tomoemami/emacs-bgm")
                                 ("Authorization" . ,(concat "Bearer " my/bgm-token))
                                 ("Accept" . "application/json"))
@@ -61,11 +62,9 @@
                 ;; Make sure the original function is loaded
                 (let ((load-path ',load-path))
                   (require 'bangumi)
-                  (when (not (eq system-type 'darwin))
-                    (setq plz-curl-default-args ',plz-curl-default-args)
-                    (setq plz-curl-program ,plz-curl-program))
-                  (setq my/bgm-token ,my/bgm-token)
+                  (setq plz-curl-default-args ',plz-curl-default-args)
                   (setq my/bgm-plz-proxy ',my/bgm-plz-proxy)
+                  (setq my/bgm-token ,my/bgm-token)
                   (my/bgm-mark-read-episodes ,subject ,readed)
                   'success)
               (error (error-message-string err))))
@@ -73,7 +72,7 @@
          `(lambda (result)
             (cond
              ((eq result 'success)
-              (message "进度更新成功 - %s" ,readed))
+              (message "%s 进度更新成功 - %s" ,subject ,readed))
              (t
               (message "进度更新失败： %s" result)))))))))
 
@@ -95,7 +94,7 @@
                        ((string-equal todo "XXXX") '(5 . "抛弃"))
                        (t '(4 . "搁置"))))
          ;; 为bgm启用代理
-         (append plz-curl-default-args my/bgm-plz-proxy))
+         (plz-curl-default-args (append plz-curl-default-args my/bgm-plz-proxy)))
     (when (and subject
                (not (and (org-get-repeat) (or (string-equal todo "DONE") (string-equal todo "TODO")))))
       (plz 'post (concat "https://api.bgm.tv/v0/users/-/collections/" subject)
