@@ -25,12 +25,7 @@ Emacs Org-mode 与 bangumi.tv / bgm.tv 联动工具
 
 请确保在您的 Emacs 配置中已经安装并加载了这些包。
 
-#+begin_src elisp
-(use-package plz :ensure t)
-(use-package async :ensure t)
-#+end_src
-
-** 安装
+** 安装与配置
 
 将 bangumi.el 文件放置到您的 Emacs =load-path= 中。
 
@@ -38,10 +33,10 @@ Emacs Org-mode 与 bangumi.tv / bgm.tv 联动工具
 
 
 #+begin_src elisp
+(use-package plz :ensure t)
+(use-package async :ensure t)
 (require 'bangumi)
 #+end_src
-
-** 配置
 
 *** Bangumi Access Token
 
