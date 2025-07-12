@@ -1,12 +1,15 @@
 (require 'plz)
 (require 'json)
 
+(defvar my/bgm-plz-proxy nil
+  "proxy for plz, a list like '(\"--proxy\" \"http://127.0.0.1:7890\") ")
+
 (defun my/bgm-mark-read-episodes (subject readcount)
   "更新某subject的观看进度"
   (when (> readcount 0)
     ;; 这里调用下面的函数处理得到需要标记为已读的章节编号
     (let* (;; 为bgm启用全局代理
-           (plz-curl-default-args '("--silent" "--location" "--ssl-no-revoke" "--proxy" "http://127.0.0.1:7890"))
+           (plz-curl-default-args (append plz-curl-default-args my/bgm-plz-proxy))
            (unread (my/bgm-get-subject-marked-unread-episodes subject readcount)))
       ;;没有匹配到的未读章节时跳过
       (when unread
@@ -25,7 +28,6 @@
   "
   ;; 获取该subject的全部章节
   (let* (;; 由于上层代码已经设置了代理，这里不再重复
-         ;; (plz-curl-default-args '("--silent" "--location" "--proxy" "http://127.0.0.1:7890"))
          (episodes (plz 'get (concat "https://api.bgm.tv/v0/users/-/collections/" subject "/episodes?offset=0&limit=100")
                      :headers `(("User-Agent" . "tomoemami/emacs-bgm")
                                 ("Authorization" . ,(concat "Bearer " my/bgm-token))
@@ -63,6 +65,7 @@
                     (setq plz-curl-default-args ',plz-curl-default-args)
                     (setq plz-curl-program ,plz-curl-program))
                   (setq my/bgm-token ,my/bgm-token)
+                  (setq my/bgm-plz-proxy ',my/bgm-plz-proxy)
                   (my/bgm-mark-read-episodes ,subject ,readed)
                   'success)
               (error (error-message-string err))))
@@ -91,8 +94,8 @@
                        ((string-equal todo "DONE") '(2 . "看过"))
                        ((string-equal todo "XXXX") '(5 . "抛弃"))
                        (t '(4 . "搁置"))))
-         ;; 为bgm启用全局代理
-         (plz-curl-default-args '("--silent" "--location" "--ssl-no-revoke" "--proxy" "http://127.0.0.1:7890")))
+         ;; 为bgm启用代理
+         (append plz-curl-default-args my/bgm-plz-proxy))
     (when (and subject
                (not (and (org-get-repeat) (or (string-equal todo "DONE") (string-equal todo "TODO")))))
       (plz 'post (concat "https://api.bgm.tv/v0/users/-/collections/" subject)
