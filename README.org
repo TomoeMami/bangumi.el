@@ -130,3 +130,12 @@ my/bgm-update-subject
 #+end_src
 
 一个交互式函数，用于同步 Bangumi 条目的收藏状态。它会根据 Org 标题的 TODO 关键字来发送更新请求。
+
+*** 条件判断函数
+
+#+begin_src elisp
+my/bgm-update-subject-conditions
+my/bgm-async-update-episodes-conditions
+#+end_src
+
+两个条件判断函数，单独提取出来以便用户覆盖式自定义
