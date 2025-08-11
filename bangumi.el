@@ -45,12 +45,15 @@
         (push (alist-get 'id (alist-get 'episode epi)) result)))
     result))
 
+(defun my/bgm-async-update-episodes-conditions ()
+  "将条件判断单独提取出来，便于用户自定义"
+  (and (org-entry-get nil "BGM") (nth 2 (org-heading-components))))
 
 (defun my/bgm-async-update-episodes()
   "更新章节，放在checkbox变化的hook里"
   (interactive)
   ;; 仅在有BGM property和有TODO-keywords的时候触发
-  (when (and (org-entry-get nil "BGM") (nth 2 (org-heading-components)))
+  (when (my/bgm-async-update-episodes-conditions)
     (let* ((heading (nth 4 (org-heading-components)))
            (readed (when (string-match "\\[\\([0-9]+\\)/" heading) (string-to-number (match-string 1 heading))))
            (subject (org-entry-get nil "BGM")))
@@ -76,6 +79,11 @@
              (t
               (message "进度更新失败： %s" result)))))))))
 
+(defun my/bgm-update-subject-conditions (subject todo)
+  "将条件判断单独提取出来，便于用户自定义"
+  (and subject
+       (not (and (org-get-repeat) (or (string-equal todo "DONE") (string-equal todo "TODO"))))))
+
 (defun my/bgm-update-subject()
   """
 同步更新BGM的观看情况。目前是TODO-在看；DONE-看过；XXXX-抛弃；HOLD-想看；没有TODO关键字-搁置。
@@ -95,8 +103,7 @@
                        (t '(4 . "搁置"))))
          ;; 为bgm启用代理
          (plz-curl-default-args (append plz-curl-default-args my/bgm-plz-proxy)))
-    (when (and subject
-               (not (and (org-get-repeat) (or (string-equal todo "DONE") (string-equal todo "TODO")))))
+    (when (my/bgm-update-subject-conditions subject todo)
       (plz 'post (concat "https://api.bgm.tv/v0/users/-/collections/" subject)
         :headers `(("User-Agent" . "tomoemami/emacs-bgm")
                    ("Authorization" . ,(concat "Bearer " my/bgm-token))
