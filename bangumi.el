@@ -96,7 +96,7 @@
 当有repeat，且from和to都在todo-keywords中时，证明在重复中，不更新观看状态
   """
   (interactive)
-  (when-let* ((from-state (format "%s" (plist-get change-plist :from)))
+  (let* ((from-state (format "%s" (plist-get change-plist :from)))
          (to-state (format "%s" (plist-get change-plist :to)))
          (subject (org-entry-get nil "BGM"))
          (status (cond ((string-equal to-state "TODO") '(3 . "在看"))
@@ -106,7 +106,7 @@
                        (t '(4 . "搁置"))))
          ;; 为bgm启用代理
          (plz-curl-default-args (append plz-curl-default-args my/bgm-plz-proxy)))
-    (when (my/bgm-update-subject-conditions from-state to-state)
+    (when (and subject (my/bgm-update-subject-conditions from-state to-state))
       (plz 'post (concat "https://api.bgm.tv/v0/users/-/collections/" subject)
         :headers `(("User-Agent" . "tomoemami/emacs-bgm")
                    ("Authorization" . ,(concat "Bearer " my/bgm-token))
