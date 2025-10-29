@@ -79,31 +79,34 @@
              (t
               (message "进度更新失败： %s" result)))))))))
 
-(defun my/bgm-update-subject-conditions (subject todo)
+(defun my/bgm-update-subject-conditions (from to)
   "将条件判断单独提取出来，便于用户自定义"
-  (and subject
-       (not (and (org-get-repeat) (or (string-equal todo "DONE") (string-equal todo "TODO"))))))
+  ;当有repeat，且from和to都在todo-keywords中时，证明在重复中，不更新观看状态
+  (not (and (org-get-repeat) 
+            (member from org-todo-keywords-1)
+            (member to org-todo-keywords-1))))
 
-(defun my/bgm-update-subject()
+(defun my/bgm-update-subject(change-plist)
   """
 同步更新BGM的观看情况。目前是TODO-在看；DONE-看过；XXXX-抛弃；HOLD-想看；没有TODO关键字-搁置。
 相关数字与BGM状态的对应：
 1 想看，2 看过，3 在看，4 搁置，5 抛弃
 目前仅会在以下情况触发：
 有'BGM'属性，证明需要调用bangumi的api 'and'
-'not' 有'repeater'且标记为'DONE'/'TODO'，证明是类似追番的场景
+当有repeat，且from和to都在todo-keywords中时，证明在重复中，不更新观看状态
   """
   (interactive)
-  (let* ((subject (org-entry-get nil "BGM"))
-         (todo (nth 2 (org-heading-components)))
-         (status (cond ((string-equal todo "TODO") '(3 . "在看"))
-                       ((string-equal todo "HOLD") '(1 . "想看"))
-                       ((string-equal todo "DONE") '(2 . "看过"))
-                       ((string-equal todo "XXXX") '(5 . "抛弃"))
+  (when-let* ((from-state (format "%s" (plist-get change-plist :from)))
+         (to-state (format "%s" (plist-get change-plist :to)))
+         (subject (org-entry-get nil "BGM"))
+         (status (cond ((string-equal to-state "TODO") '(3 . "在看"))
+                       ((string-equal to-state "HOLD") '(1 . "想看"))
+                       ((string-equal to-state "DONE") '(2 . "看过"))
+                       ((string-equal to-state "XXXX") '(5 . "抛弃"))
                        (t '(4 . "搁置"))))
          ;; 为bgm启用代理
          (plz-curl-default-args (append plz-curl-default-args my/bgm-plz-proxy)))
-    (when (my/bgm-update-subject-conditions subject todo)
+    (when (my/bgm-update-subject-conditions from-state to-state)
       (plz 'post (concat "https://api.bgm.tv/v0/users/-/collections/" subject)
         :headers `(("User-Agent" . "tomoemami/emacs-bgm")
                    ("Authorization" . ,(concat "Bearer " my/bgm-token))
