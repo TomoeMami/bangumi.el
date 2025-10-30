@@ -114,7 +114,7 @@ Org TODO 关键词与 Bangumi 收藏类型的映射关系如下：
 
 仅当断言函数 `my/bgm-update-subject-conditions' 返回非空值时，才会执行 API 调用。认证信息来自变量 `my/bgm-token' ，若已配置 `my/bgm-plz-proxy' 则可能使用代理。"
   (interactive)
-  (when-let* ((from-state (format "%s" (plist-get change-plist :from)))
+  (let* ((from-state (format "%s" (plist-get change-plist :from)))
          (to-state (format "%s" (plist-get change-plist :to)))
          (subject (org-entry-get nil "BGM"))
          (status (cond ((string-equal to-state "TODO") '(3 . "在看"))
@@ -124,7 +124,7 @@ Org TODO 关键词与 Bangumi 收藏类型的映射关系如下：
                        (t '(4 . "搁置"))))
          ;; 为bgm启用代理
          (plz-curl-default-args (append plz-curl-default-args my/bgm-plz-proxy)))
-    (when (my/bgm-update-subject-conditions from-state to-state)
+    (when (and subject (my/bgm-update-subject-conditions from-state to-state))
       (plz 'post (concat "https://api.bgm.tv/v0/users/-/collections/" subject)
         :headers `(("User-Agent" . "tomoemami/emacs-bgm")
                    ("Authorization" . ,(concat "Bearer " my/bgm-token))
