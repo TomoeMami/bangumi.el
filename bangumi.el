@@ -59,6 +59,7 @@
   "将条件判断单独提取出来，便于用户自定义"
   (and (org-entry-get nil "BGM") (nth 2 (org-heading-components))))
 
+;;;###autoload
 (defun my/bgm-async-update-episodes()
   "在当前 Org 条目中异步更新 Bangumi 观看进度。
 
@@ -99,6 +100,7 @@
             (member from org-todo-keywords-1)
             (member to org-todo-keywords-1))))
 
+;;;###autoload
 (defun my/bgm-update-subject(change-plist)
   "根据 Org 模式中 TODO 状态的变化同步 Bangumi 收藏状态。状态转换信息由属性列表 CHANGE-PLIST 提供。
 
