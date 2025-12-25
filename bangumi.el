@@ -1,6 +1,5 @@
 (require 'plz)
 (require 'json)
-(require 'async)
 
 (defvar my/bgm-plz-proxy nil
   "proxy for plz, a list like '(\"--proxy\" \"http://127.0.0.1:7890\") ")
@@ -15,19 +14,29 @@
 若 READCOUNT 不是正数，或无需更新剧集数据，则不会发起 API 调用。成功调用后强制延迟 5 秒，以避免触发频率限制。更多 API 详细信息请参阅网址 https://bangumi.github.io/api。"
   (when (> readcount 0)
     ;; 这里调用下面的函数处理得到需要标记为已读的章节编号
-    (let* (;; 为bgm启用全局代理
-           (plz-curl-default-args (append plz-curl-default-args my/bgm-plz-proxy))
-           (unread (my/bgm-get-subject-marked-unread-episodes subject readcount)))
-      ;;没有匹配到的未读章节时跳过
-      (when unread
-        (plz 'patch (concat "https://api.bgm.tv/v0/users/-/collections/" subject "/episodes")
-          :headers `(("User-Agent" . "tomoemami/emacs-bgm")
-                     ("Authorization" . ,(concat "Bearer " my/bgm-token))
-                     ("Accept" . "*/*")
-                     ("Content-Type" . "application/json"))
-          :body (json-encode `(:episode_id ,unread :type 2))
-          :then (lambda (r) (message "%s" r))))
-      (sleep-for 5))))
+    (let* ((plz-curl-default-args (append plz-curl-default-args my/bgm-plz-proxy)) ;; 为bgm启用全局代理
+           (readed (number-sequence 1 readcount))
+           (result '()))
+      (plz 'get (concat "https://api.bgm.tv/v0/users/-/collections/" subject "/episodes?offset=0&limit=100")
+        :headers `(("User-Agent" . "tomoemami/emacs-bgm")
+                   ("Authorization" . ,(concat "Bearer " my/bgm-token))
+                   ("Accept" . "application/json"))
+        :as #'json-read
+        :then (lambda (episodes)
+                (dolist (epi (seq-into (alist-get 'data episodes) 'list))
+                  ;; 当 某一章节未标为已读（2代表已读） 且 序号在目前标记的观看进度内时
+                  (when (and (< (alist-get 'type epi) 1) (memq (alist-get 'ep (alist-get 'episode epi)) readed))
+                    ;; 收集汇总Bangumi上未读章节的编号
+                    (push (alist-get 'id (alist-get 'episode epi)) result)))
+                ;;没有匹配到的未读章节时跳过
+                (when result
+                  (plz 'patch (concat "https://api.bgm.tv/v0/users/-/collections/" subject "/episodes")
+                    :headers `(("User-Agent" . "tomoemami/emacs-bgm")
+                               ("Authorization" . ,(concat "Bearer " my/bgm-token))
+                               ("Accept" . "*/*")
+                               ("Content-Type" . "application/json"))
+                    :body (json-encode `(:episode_id ,unread :type 2))
+                    :then (lambda (r) (message "%s" r)))))))))
 
 (defun my/bgm-get-subject-marked-unread-episodes (subject readcount)
   "获取条目 SUBJECT 中前 READCOUNT 集范围内未观看的剧集 ID 列表。
@@ -55,43 +64,24 @@
         (push (alist-get 'id (alist-get 'episode epi)) result)))
     result))
 
-(defun my/bgm-async-update-episodes-conditions ()
+(defun my/bgm-update-episodes-conditions ()
   "将条件判断单独提取出来，便于用户自定义"
   (and (org-entry-get nil "BGM") (nth 2 (org-heading-components))))
 
 ;;;###autoload
-(defun my/bgm-async-update-episodes()
+(defun my/bgm-update-episodes()
   "在当前 Org 条目中异步更新 Bangumi 观看进度。
 
 此交互式命令会从标题的进度饼干（例如 '[5/10]'）中读取已观看集数，并从当前 Org 条目的 'BGM' 属性中获取条目 ID。随后，它会在后台进程中调用 `my/bgm-mark-read-episodes' 来与 Bangumi.tv 同步观看进度，从而避免 Emacs 界面卡顿。
-仅当断言函数 `my/bgm-async-update-episodes-conditions' 返回非空值时，此命令才会执行。操作完成后，会在回显区域显示成功或失败的消息。此函数设计用于钩子中，例如在 Org 复选框状态发生变化时触发。"
+仅当断言函数 `my/bgm-update-episodes-conditions' 返回非空值时，此命令才会执行。操作完成后，会在回显区域显示成功或失败的消息。此函数设计用于钩子中，例如在 Org 复选框状态发生变化时触发。"
   (interactive)
   ;; 仅在有BGM property和有TODO-keywords的时候触发
-  (when (my/bgm-async-update-episodes-conditions)
+  (when (my/bgm-update-episodes-conditions)
     (let* ((heading (nth 4 (org-heading-components)))
            (readed (when (string-match "\\[\\([0-9]+\\)/" heading) (string-to-number (match-string 1 heading))))
            (subject (org-entry-get nil "BGM")))
       (when (and readed (> readed 0) subject)
-        (async-start
-         ;; --- This runs in the background ---
-         `(lambda ()
-            (condition-case err
-                ;; Make sure the original function is loaded
-                (let ((load-path ',load-path))
-                  (require 'bangumi)
-                  (setq plz-curl-default-args ',plz-curl-default-args)
-                  (setq my/bgm-plz-proxy ',my/bgm-plz-proxy)
-                  (setq my/bgm-token ,my/bgm-token)
-                  (my/bgm-mark-read-episodes ,subject ,readed)
-                  'success)
-              (error (error-message-string err))))
-         ;; --- This runs after the background task is done ---
-         `(lambda (result)
-            (cond
-             ((eq result 'success)
-              (message "%s 进度更新成功 - %s" ,subject ,readed))
-             (t
-              (message "进度更新失败： %s" result)))))))))
+        (my/bgm-mark-read-episodes subject readed)))))
 
 (defun my/bgm-update-subject-conditions (from to)
   "将条件判断单独提取出来，便于用户自定义"
