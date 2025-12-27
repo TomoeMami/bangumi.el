@@ -1,3 +1,4 @@
+;;;   -*- lexical-binding: t; -*-
 (require 'plz)
 (require 'json)
 
@@ -35,34 +36,8 @@
                                ("Authorization" . ,(concat "Bearer " my/bgm-token))
                                ("Accept" . "*/*")
                                ("Content-Type" . "application/json"))
-                    :body (json-encode `(:episode_id ,unread :type 2))
+                    :body (json-encode `(:episode_id ,result :type 2))
                     :then (lambda (r) (message "%s" r)))))))))
-
-(defun my/bgm-get-subject-marked-unread-episodes (subject readcount)
-  "获取条目 SUBJECT 中前 READCOUNT 集范围内未观看的剧集 ID 列表。
-
-此函数会获取指定 Bangumi 条目 SUBJECT 的用户剧集收藏状态，并返回在前 READCOUNT 集范围内、尚未在 Bangumi 服务器上标记为已观看（即其收藏类型值小于 1）的剧集 ID 列表。
-
-该函数需要通过变量 `my/bgm-token' 进行身份认证。返回的列表包含整数形式的 ID，适用于其他 Bangumi API 端点。
-
-注意：由于单次 API 调用的限制，此函数目前最多只能获取 100 集的数据。"
-  ;; 获取该subject的全部章节
-  ;; 由于上层代码已经设置了代理，这里不再重复
-  (let* ((episodes (plz 'get (concat "https://api.bgm.tv/v0/users/-/collections/" subject "/episodes?offset=0&limit=100")
-                     :headers `(("User-Agent" . "tomoemami/emacs-bgm")
-                                ("Authorization" . ,(concat "Bearer " my/bgm-token))
-                                ("Accept" . "application/json"))
-                     :as #'json-read))
-         ;; 处理传入的观看进度
-         (readed (number-sequence 1 readcount))
-         (result '()))
-    ;; 获取全部章节数据
-    (dolist (epi (seq-into (alist-get 'data episodes) 'list))
-      ;; 当 某一章节未标为已读（2代表已读） 且 序号在目前标记的观看进度内时
-      (when (and (< (alist-get 'type epi) 1) (memq (alist-get 'ep (alist-get 'episode epi)) readed))
-        ;; 收集汇总Bangumi上未读章节的编号
-        (push (alist-get 'id (alist-get 'episode epi)) result)))
-    result))
 
 (defun my/bgm-update-episodes-conditions ()
   "将条件判断单独提取出来，便于用户自定义"
@@ -78,7 +53,8 @@
   ;; 仅在有BGM property和有TODO-keywords的时候触发
   (when (my/bgm-update-episodes-conditions)
     (let* ((heading (nth 4 (org-heading-components)))
-           (readed (when (string-match "\\[\\([0-9]+\\)/" heading) (string-to-number (match-string 1 heading))))
+           (readed (save-match-data
+                     (when (string-match "\\[\\([0-9]+\\)/" heading) (string-to-number (match-string 1 heading)))))
            (subject (org-entry-get nil "BGM")))
       (when (and readed (> readed 0) subject)
         (my/bgm-mark-read-episodes subject readed)))))
