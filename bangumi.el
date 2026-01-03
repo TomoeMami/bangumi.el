@@ -37,7 +37,7 @@
                                ("Accept" . "*/*")
                                ("Content-Type" . "application/json"))
                     :body (json-encode `(:episode_id ,result :type 2))
-                    :then (lambda (r) (message "%s" r)))))))))
+                    :then (lambda (r) (message "%s" r) (message "已更新BGM观看进度")))))))))
 
 (defun my/bgm-update-episodes-conditions ()
   "将条件判断单独提取出来，便于用户自定义"
@@ -103,3 +103,4 @@ Org TODO 关键词与 Bangumi 收藏类型的映射关系如下：
 
 (provide 'bangumi)
 ;;; bangumi.el ends here
+
