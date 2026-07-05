@@ -8,7 +8,7 @@
 ;; URL: https://github.com/TomoeMami/bangumi.el
 
 ;; Version: 1.0.0
-;; Package-Requires: ((emacs "27.1") (plz "0.9"))
+;; Package-Requires: ((emacs "25.1") (plz "0.9"))
 
 ;; This file is not part of GNU Emacs.
 
