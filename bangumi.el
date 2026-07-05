@@ -1,26 +1,56 @@
-;;;   -*- lexical-binding: t; -*-
+;;; bangumi.el --- Bangumi 同步的插件 -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2025-2026 TomoeMami
+
+;; Author: TomoeMami <trembleafterme@outlook.com>
+;; Created: 2025.06
+
+;; URL: https://github.com/TomoeMami/bangumi.el
+
+;; Version: 1.0.0
+;; Package-Requires: ((emacs "27.1") (plz "0.9"))
+
+;; This file is not part of GNU Emacs.
+
+;; This file is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This file is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this file.  If not, see <https://www.gnu.org/licenses/>.
+
+;;; Commentary:
+;; 与Bangumi同步观看进度的插件
+
+;;; Code:
 (require 'plz)
 (require 'json)
 
-(defvar my/bgm-plz-proxy nil
+(defvar bangumi-plz-proxy nil
   "proxy for plz, a list like '(\"--proxy\" \"http://127.0.0.1:7890\") ")
 
-(defun my/bgm-mark-read-episodes (subject readcount)
+(defun bangumi-mark-read-episodes (subject readcount)
   "将番剧条目 SUBJECT 的前 READCOUNT 集标记为已观看。
 
 此函数会向 Bangumi API 发送 PATCH 请求以更新用户的观看进度。它首先会确定指定 SUBJECT ID 对应的前 READCOUNT 集中哪些尚未被观看，随后将这些剧集标记为“已观看”（收藏类型 2）。
 
-需要身份认证，认证信息来自变量 `my/bgm-token'。若已配置变量 `my/bgm-plz-proxy'，请求可能会通过代理进行。辅助函数 `my/bgm-get-subject-marked-unread-episodes' 用于获取待更新的剧集列表。
+需要身份认证，认证信息来自变量 `bangumi-token'。若已配置变量 `bangumi-plz-proxy'，请求可能会通过代理进行。辅助函数 `bangumi-get-subject-marked-unread-episodes' 用于获取待更新的剧集列表。
 
 若 READCOUNT 不是正数，或无需更新剧集数据，则不会发起 API 调用。成功调用后强制延迟 5 秒，以避免触发频率限制。更多 API 详细信息请参阅网址 https://bangumi.github.io/api。"
   (when (> readcount 0)
     ;; 这里调用下面的函数处理得到需要标记为已读的章节编号
-    (let* ((plz-curl-default-args (append plz-curl-default-args my/bgm-plz-proxy)) ;; 为bgm启用全局代理
+    (let* ((plz-curl-default-args (append plz-curl-default-args bangumi-plz-proxy)) ;; 为bgm启用全局代理
            (readed (number-sequence 1 readcount))
            (result '()))
       (plz 'get (concat "https://api.bgm.tv/v0/users/-/collections/" subject "/episodes?offset=0&limit=100")
         :headers `(("User-Agent" . "tomoemami/emacs-bgm")
-                   ("Authorization" . ,(concat "Bearer " my/bgm-token))
+                   ("Authorization" . ,(concat "Bearer " bangumi-token))
                    ("Accept" . "application/json"))
         :as #'json-read
         :then (lambda (episodes)
@@ -33,33 +63,33 @@
                 (when result
                   (plz 'patch (concat "https://api.bgm.tv/v0/users/-/collections/" subject "/episodes")
                     :headers `(("User-Agent" . "tomoemami/emacs-bgm")
-                               ("Authorization" . ,(concat "Bearer " my/bgm-token))
+                               ("Authorization" . ,(concat "Bearer " bangumi-token))
                                ("Accept" . "*/*")
                                ("Content-Type" . "application/json"))
                     :body (json-encode `(:episode_id ,result :type 2))
                     :then (lambda (r) (message "%s" r) (message "已更新BGM观看进度")))))))))
 
-(defun my/bgm-update-episodes-conditions ()
+(defun bangumi-update-episodes-conditions ()
   "将条件判断单独提取出来，便于用户自定义"
   (and (org-entry-get nil "BGM") (nth 2 (org-heading-components))))
 
 ;;;###autoload
-(defun my/bgm-update-episodes()
+(defun bangumi-update-episodes()
   "在当前 Org 条目中异步更新 Bangumi 观看进度。
 
-此交互式命令会从标题的进度饼干（例如 '[5/10]'）中读取已观看集数，并从当前 Org 条目的 'BGM' 属性中获取条目 ID。随后，它会在后台进程中调用 `my/bgm-mark-read-episodes' 来与 Bangumi.tv 同步观看进度，从而避免 Emacs 界面卡顿。
-仅当断言函数 `my/bgm-update-episodes-conditions' 返回非空值时，此命令才会执行。操作完成后，会在回显区域显示成功或失败的消息。此函数设计用于钩子中，例如在 Org 复选框状态发生变化时触发。"
+此交互式命令会从标题的进度饼干（例如 '[5/10]'）中读取已观看集数，并从当前 Org 条目的 'BGM' 属性中获取条目 ID。随后，它会在后台进程中调用 `bangumi-mark-read-episodes' 来与 Bangumi.tv 同步观看进度，从而避免 Emacs 界面卡顿。
+仅当断言函数 `bangumi-update-episodes-conditions' 返回非空值时，此命令才会执行。操作完成后，会在回显区域显示成功或失败的消息。此函数设计用于钩子中，例如在 Org 复选框状态发生变化时触发。"
   (interactive)
   ;; 仅在有BGM property和有TODO-keywords的时候触发
-  (when (my/bgm-update-episodes-conditions)
+  (when (bangumi-update-episodes-conditions)
     (let* ((heading (nth 4 (org-heading-components)))
            (readed (save-match-data
                      (when (string-match "\\[\\([0-9]+\\)/" heading) (string-to-number (match-string 1 heading)))))
            (subject (org-entry-get nil "BGM")))
       (when (and readed (> readed 0) subject)
-        (my/bgm-mark-read-episodes subject readed)))))
+        (bangumi-mark-read-episodes subject readed)))))
 
-(defun my/bgm-update-subject-conditions (from to)
+(defun bangumi-update-subject-conditions (from to)
   "将条件判断单独提取出来，便于用户自定义"
   ;当有repeat，且from和to都在todo-keywords中时，证明在重复中，不更新观看状态
   (not (and (org-get-repeat) 
@@ -67,7 +97,7 @@
             (member to org-todo-keywords-1))))
 
 ;;;###autoload
-(defun my/bgm-update-subject(change-plist)
+(defun bangumi-update-subject(change-plist)
   "根据 Org 模式中 TODO 状态的变化同步 Bangumi 收藏状态。状态转换信息由属性列表 CHANGE-PLIST 提供。
 
 此函数设计用于通过钩子调用（例如 `org-trigger-hook'）。它会从当前 Org 条目的 'BGM' 属性中读取条目 ID，然后根据 CHANGE-PLIST 中的 ':to' 状态值更新 Bangumi.tv 上的收藏状态。
@@ -80,7 +110,7 @@ Org TODO 关键词与 Bangumi 收藏类型的映射关系如下：
 'XXXX'：抛弃（类型 5）
 无关键词（例如状态被移除）：搁置（类型 4）
 
-仅当断言函数 `my/bgm-update-subject-conditions' 返回非空值时，才会执行 API 调用。认证信息来自变量 `my/bgm-token' ，若已配置 `my/bgm-plz-proxy' 则可能使用代理。"
+仅当断言函数 `bangumi-update-subject-conditions' 返回非空值时，才会执行 API 调用。认证信息来自变量 `bangumi-token' ，若已配置 `bangumi-plz-proxy' 则可能使用代理。"
   (interactive)
   (let* ((from-state (format "%s" (plist-get change-plist :from)))
          (to-state (format "%s" (plist-get change-plist :to)))
@@ -91,11 +121,11 @@ Org TODO 关键词与 Bangumi 收藏类型的映射关系如下：
                        ((string-equal to-state "XXXX") '(5 . "抛弃"))
                        (t '(4 . "搁置"))))
          ;; 为bgm启用代理
-         (plz-curl-default-args (append plz-curl-default-args my/bgm-plz-proxy)))
-    (when (and subject (my/bgm-update-subject-conditions from-state to-state))
+         (plz-curl-default-args (append plz-curl-default-args bangumi-plz-proxy)))
+    (when (and subject (bangumi-update-subject-conditions from-state to-state))
       (plz 'post (concat "https://api.bgm.tv/v0/users/-/collections/" subject)
         :headers `(("User-Agent" . "tomoemami/emacs-bgm")
-                   ("Authorization" . ,(concat "Bearer " my/bgm-token))
+                   ("Authorization" . ,(concat "Bearer " bangumi-token))
                    ("Content-Type" . "application/json")
                    ("Accept" . "*/*"))
         :body (json-encode `(("type" . ,(car status))))
