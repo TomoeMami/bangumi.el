@@ -7,7 +7,7 @@
 
 ;; URL: https://github.com/TomoeMami/bangumi.el
 
-;; Version: 1.0.1
+;; Version: 1.0.2
 ;; Package-Requires: ((emacs "25.1") (plz "0.9"))
 
 ;; This file is not part of GNU Emacs.
@@ -36,7 +36,8 @@
   "proxy for plz, a list like '(\"--proxy\" \"http://127.0.0.1:7890\") ")
 
 (defvar bangumi-token nil
-  "Bangumi auth token ")
+  "Bangumi auth token.
+Generated in https://next.bgm.tv/demo/access-token ")
 
 (defun bangumi-mark-read-episodes (subject readcount)
   "将番剧条目 SUBJECT 的前 READCOUNT 集标记为已观看。
@@ -70,7 +71,9 @@
                                ("Accept" . "*/*")
                                ("Content-Type" . "application/json"))
                     :body (json-encode `(:episode_id ,result :type 2))
-                    :then (lambda (r) (message "%s" r) (message "已更新BGM观看进度")))))))))
+                    :then (lambda (r) (message "%s" r) (message "已更新BGM观看进度"))
+                    :else (lambda (err) (message "Bangumi error: %s" (plz-error-message err))))))
+        :else (lambda (err) (message "Bangumi error: %s" (plz-error-message err)))))))
 
 (defun bangumi-update-episodes-conditions ()
   "将条件判断单独提取出来，便于用户自定义"
@@ -132,7 +135,8 @@ Org TODO 关键词与 Bangumi 收藏类型的映射关系如下：
                    ("Content-Type" . "application/json")
                    ("Accept" . "*/*"))
         :body (json-encode `(("type" . ,(car status))))
-        :then (lambda (r) (message "%s" r) (message "已更新BGM观看状态"))))))
+        :then (lambda (r) (message "%s" r) (message "已更新BGM观看状态"))
+        :else (lambda (err) (message "Bangumi error: %s" (plz-error-message err)))))))
 
 (provide 'bangumi)
 ;;; bangumi.el ends here
