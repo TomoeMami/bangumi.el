@@ -65,15 +65,16 @@ Generated in https://next.bgm.tv/demo/access-token ")
                     (push (alist-get 'id (alist-get 'episode epi)) result)))
                 ;;没有匹配到的未读章节时跳过
                 (when result
-                  (plz 'patch (concat "https://api.bgm.tv/v0/users/-/collections/" subject "/episodes")
-                    :headers `(("User-Agent" . "tomoemami/emacs-bgm")
-                               ("Authorization" . ,(concat "Bearer " bangumi-token))
-                               ("Accept" . "*/*")
-                               ("Content-Type" . "application/json"))
-                    :body (json-encode `(:episode_id ,result :type 2))
-                    :then (lambda (r) (message "%s" r) (message "已更新BGM观看进度"))
-                    :else (lambda (err) (message "Bangumi error: %s" (plz-error-message err))))))
-        :else (lambda (err) (message "Bangumi error: %s" (plz-error-message err)))))))
+                  (let ((plz-curl-default-args (append plz-curl-default-args bangumi-plz-proxy)))
+                        (plz 'patch (concat "https://api.bgm.tv/v0/users/-/collections/" subject "/episodes")
+                          :headers `(("User-Agent" . "tomoemami/emacs-bgm")
+                                     ("Authorization" . ,(concat "Bearer " bangumi-token))
+                                     ("Accept" . "*/*")
+                                     ("Content-Type" . "application/json"))
+                          :body (json-encode `(:episode_id ,result :type 2))
+                          :then (lambda (r) (message "%s" r) (message "已更新BGM观看进度"))
+                          :else (lambda (err) (message "Bangumi patch error: %s" err))))))
+        :else (lambda (err) (message "Bangumi get error: %s" err))))))
 
 (defun bangumi-update-episodes-conditions ()
   "将条件判断单独提取出来，便于用户自定义"
@@ -136,7 +137,7 @@ Org TODO 关键词与 Bangumi 收藏类型的映射关系如下：
                    ("Accept" . "*/*"))
         :body (json-encode `(("type" . ,(car status))))
         :then (lambda (r) (message "%s" r) (message "已更新BGM观看状态"))
-        :else (lambda (err) (message "Bangumi error: %s" (plz-error-message err)))))))
+        :else (lambda (err) (message "Bangumi post error: %s" err))))))
 
 (provide 'bangumi)
 ;;; bangumi.el ends here
