@@ -32,12 +32,20 @@
 (require 'plz)
 (require 'json)
 
-(defvar bangumi-plz-proxy nil
-  "proxy for plz, a list like '(\"--proxy\" \"http://127.0.0.1:7890\") ")
+(defgroup bangumi nil
+  "Bangumi synchronization settings."
+  :group 'applications)
 
-(defvar bangumi-token nil
+(defcustom bangumi-plz-proxy nil
+  "Proxy for plz, a list like '(\"--proxy\" \"http://127.0.0.1:7890\")."
+  :type '(repeat string)
+  :group 'bangumi)
+
+(defcustom bangumi-token nil
   "Bangumi auth token.
-Generated in https://next.bgm.tv/demo/access-token ")
+Generated in https://next.bgm.tv/demo/access-token."
+  :type 'string
+  :group 'bangumi)
 
 (defun bangumi-mark-read-episodes (subject readcount)
   "将番剧条目 SUBJECT 的前 READCOUNT 集标记为已观看。
