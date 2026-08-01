@@ -7,7 +7,7 @@
 
 ;; URL: https://github.com/TomoeMami/bangumi.el
 
-;; Version: 1.0.3
+;; Version: 1.0.4
 ;; Package-Requires: ((emacs "25.1") (plz "0.9"))
 
 ;; This file is not part of GNU Emacs.
@@ -31,6 +31,7 @@
 ;;; Code:
 (require 'plz)
 (require 'json)
+(require 'map)
 
 (defgroup bangumi nil
   "Bangumi synchronization settings."
@@ -66,11 +67,11 @@ Generated in https://next.bgm.tv/demo/access-token."
                    ("Accept" . "application/json"))
         :as #'json-read
         :then (lambda (episodes)
-                (dolist (epi (seq-into (alist-get 'data episodes) 'list))
+                (dolist (epi (seq-into (map-elt episodes 'data) 'list))
                   ;; 当 某一章节未标为已读（2代表已读） 且 序号在目前标记的观看进度内时
-                  (when (and (< (alist-get 'type epi) 1) (memq (alist-get 'ep (alist-get 'episode epi)) readed))
+                  (when (and (< (map-elt epi 'type) 1) (memq (map-nested-elt epi '(episode ep)) readed))
                     ;; 收集汇总Bangumi上未读章节的编号
-                    (push (alist-get 'id (alist-get 'episode epi)) result)))
+                    (push (map-nested-elt epi '(episode id)) result)))
                 ;;没有匹配到的未读章节时跳过
                 (when result
                   (let ((plz-curl-default-args (append plz-curl-default-args bangumi-plz-proxy)))
@@ -127,8 +128,8 @@ Org TODO 关键词与 Bangumi 收藏类型的映射关系如下：
 
 仅当断言函数 `bangumi-update-subject-conditions' 返回非空值时，才会执行 API 调用。认证信息来自变量 `bangumi-token' ，若已配置 `bangumi-plz-proxy' 则可能使用代理。"
   (interactive)
-  (let* ((from-state (format "%s" (plist-get change-plist :from)))
-         (to-state (format "%s" (plist-get change-plist :to)))
+  (let* ((from-state (format "%s" (map-elt change-plist :from)))
+         (to-state (format "%s" (map-elt change-plist :to)))
          (subject (org-entry-get nil "BGM"))
          (status (cond ((string-equal to-state "TODO") '(3 . "在看"))
                        ((string-equal to-state "HOLD") '(1 . "想看"))
