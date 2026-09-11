@@ -94,6 +94,21 @@ Emacs Org-mode 与 bangumi.tv / bgm.tv 联动工具
 | XXXX         | 抛弃 |
 | 无TODO关键字 | 搁置 |
 
+以上映射由函数 =bangumi-update-subject-status= 完成。若您使用自定义的 =org-todo-keywords= ，覆盖该函数即可让插件按您自己的关键词判断收藏状态：
+
+#+begin_src elisp
+(defun bangumi-update-subject-status (to-state)
+  "将 TODO 关键字 TO-STATE 映射为 Bangumi 收藏状态 (TYPE . NAME)。"
+  (pcase to-state
+    ("WATCHING" '(3 . "在看"))
+    ("FINISHED" '(2 . "看过"))
+    ("PLANNED"  '(1 . "想看"))
+    ("DROPPED"  '(5 . "抛弃"))
+    (_          '(4 . "搁置"))))
+#+end_src
+
+这样无需修改插件本体，即可让 =TODO= / =DONE= 之外的关键词（如 =WATCHING= 、 =FINISHED= ）也能正确同步。
+
 您可以将 =my/bgm-update-subject= 函数添加到一个 hook 中，例如 =org-trigger-hook= ，以便在状态变更后自动触发。
 
 
@@ -136,6 +151,16 @@ my/bgm-update-subject CHANGE-PLIST
 #+end_src
 
 一个交互式函数，用于同步 Bangumi 条目的收藏状态。它会根据 Org 标题的 TODO 关键字来发送更新请求。
+
+*** 状态映射函数
+
+#+begin_src elisp
+bangumi-update-subject-status TO-STATE
+#+end_src
+
+将 TODO 关键字 =TO-STATE= 映射为 Bangumi 收藏状态的函数，返回形如 =(TYPE . NAME)= 的 cons。原本写死在 =bangumi-update-subject= 中的判断被提取到这里，默认支持 =TODO= / =DONE= / =HOLD= / =XXXX= ，其余值（包括无 TODO 关键字）视为搁置。
+
+用户可以覆盖此函数，以适配自己的 =org-todo-keywords= ，详见上文“更新观看状态”一节。
 
 *** 条件判断函数
 

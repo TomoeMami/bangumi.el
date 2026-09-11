@@ -112,13 +112,40 @@ Generated in https://next.bgm.tv/demo/access-token."
             (member from org-todo-keywords-1)
             (member to org-todo-keywords-1))))
 
+(defun bangumi-update-subject-status (to-state)
+  "将 TODO 关键字 TO-STATE 映射为 Bangumi 收藏状态。
+
+返回值是一个形如 (TYPE . NAME) 的 cons，其中 TYPE 为 Bangumi 收藏类型编号，
+NAME 为对应的中文名称：
+
+  \"TODO\"：在看（类型 3）
+  \"HOLD\"：想看（类型 1）
+  \"DONE\"：看过（类型 2）
+  \"XXXX\"：抛弃（类型 5）
+  其它值（包括无 TODO 关键字）：搁置（类型 4）
+
+TODO 关键字到收藏状态的判断被单独提取到本函数，便于用户根据自己的
+`org-todo-keywords' 覆盖式自定义，例如：
+
+  (defun bangumi-update-subject-status (to-state)
+    (pcase to-state
+      (\"WATCHING\" \\='(3 . \"在看\"))
+      (\"FINISHED\" \\='(2 . \"看过\"))
+      (_ \\='(4 . \"搁置\"))))"
+  (cond ((string-equal to-state "TODO") '(3 . "在看"))
+        ((string-equal to-state "HOLD") '(1 . "想看"))
+        ((string-equal to-state "DONE") '(2 . "看过"))
+        ((string-equal to-state "XXXX") '(5 . "抛弃"))
+        (t '(4 . "搁置"))))
+
 ;;;###autoload
 (defun bangumi-update-subject(change-plist)
   "根据 Org 模式中 TODO 状态的变化同步 Bangumi 收藏状态。状态转换信息由属性列表 CHANGE-PLIST 提供。
 
 此函数设计用于通过钩子调用（例如 `org-trigger-hook'）。它会从当前 Org 条目的 'BGM' 属性中读取条目 ID，然后根据 CHANGE-PLIST 中的 ':to' 状态值更新 Bangumi.tv 上的收藏状态。
 
-Org TODO 关键词与 Bangumi 收藏类型的映射关系如下：
+TODO 关键词到 Bangumi 收藏类型的映射由函数 `bangumi-update-subject-status' 完成，
+默认映射关系为：
 
 'TODO'：在看（类型 3）
 'DONE'：看过（类型 2）
@@ -126,16 +153,14 @@ Org TODO 关键词与 Bangumi 收藏类型的映射关系如下：
 'XXXX'：抛弃（类型 5）
 无关键词（例如状态被移除）：搁置（类型 4）
 
+如需适配自己的 `org-todo-keywords'，覆盖 `bangumi-update-subject-status' 即可。
+
 仅当断言函数 `bangumi-update-subject-conditions' 返回非空值时，才会执行 API 调用。认证信息来自变量 `bangumi-token' ，若已配置 `bangumi-plz-proxy' 则可能使用代理。"
   (interactive)
   (let* ((from-state (format "%s" (map-elt change-plist :from)))
          (to-state (format "%s" (map-elt change-plist :to)))
          (subject (org-entry-get nil "BGM"))
-         (status (cond ((string-equal to-state "TODO") '(3 . "在看"))
-                       ((string-equal to-state "HOLD") '(1 . "想看"))
-                       ((string-equal to-state "DONE") '(2 . "看过"))
-                       ((string-equal to-state "XXXX") '(5 . "抛弃"))
-                       (t '(4 . "搁置"))))
+         (status (bangumi-update-subject-status to-state))
          ;; 为bgm启用代理
          (plz-curl-default-args (append plz-curl-default-args bangumi-plz-proxy)))
     (when (and subject (bangumi-update-subject-conditions from-state to-state))
